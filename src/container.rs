@@ -112,6 +112,7 @@ impl Container {
 
     /// Start the container, if it isn't already running.
     pub async fn start(&self) -> anyhow::Result<()> {
+        eprintln!("starting container `{}`...", self.id);
         let mut pause_cmd = Command::new(RUNTIME_BIN);
         pause_cmd.args(&["start", &self.id]);
         exec_command(&mut pause_cmd).await?;
@@ -120,6 +121,7 @@ impl Container {
 
     /// Pause the container's execution, if it currently running.
     pub async fn pause(&self) -> anyhow::Result<()> {
+        eprintln!("pausing container `{}`...", self.id);
         let mut pause_cmd = Command::new(RUNTIME_BIN);
         pause_cmd.args(&["pause", &self.id]);
         exec_command(&mut pause_cmd).await?;
@@ -128,6 +130,7 @@ impl Container {
 
     /// Resume the container's execution, if it currently paused.
     pub async fn resume(&self) -> anyhow::Result<()> {
+        eprintln!("resuming container `{}`...", self.id);
         let mut resume_cmd = Command::new(RUNTIME_BIN);
         resume_cmd.args(&["resume", &self.id]);
         exec_command(&mut resume_cmd).await?;
@@ -136,6 +139,7 @@ impl Container {
 
     /// Delete the container immediately.
     pub async fn delete(self) -> anyhow::Result<()> {
+        eprintln!("deleting container `{}`...", self.id);
         let mut delete_cmd = Command::new(RUNTIME_BIN);
         delete_cmd.args(&["delete", "--force", &self.id]);
         exec_command(&mut delete_cmd).await?;

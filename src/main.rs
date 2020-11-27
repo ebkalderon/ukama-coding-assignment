@@ -41,8 +41,6 @@ impl Engine {
 
         eprintln!("unpacked, creating container...");
         let container = Container::create(container_name, runtime_dir).await?;
-
-        eprintln!("starting container...");
         container.start().await?;
         eprintln!("started container");
 
