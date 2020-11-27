@@ -18,17 +18,7 @@ pub struct OciImage(TempDir);
 impl OciImage {
     /// Retrieves an image from Docker Hub with the given spec (either `name` or `name:tag`).
     pub async fn fetch_from_docker_hub(container_spec: &str) -> anyhow::Result<Self> {
-        let segments: Vec<_> = container_spec
-            .splitn(2, ':')
-            .try_collect()
-            .map_err(|e| anyhow!("OOM error: {:?}", e))?;
-
-        let (name, tag) = match segments[..] {
-            [name] => (name, "latest"),
-            [name, tag] => (name, tag),
-            _ => return Err(anyhow!("container specification cannot be empty")),
-        };
-
+        let (name, tag) = parse_container_spec(container_spec)?;
         let src_dir = tempfile::tempdir()?;
 
         let image_src = tryformat!(64, "docker://docker.io/{}:{}", name, tag)
@@ -61,6 +51,21 @@ impl OciImage {
     pub async fn unpack(self) -> anyhow::Result<OciBundle> {
         OciBundle::unpack_from(self.0.path()).await
     }
+}
+
+fn parse_container_spec<'a>(spec: &'a str) -> anyhow::Result<(&'a str, &'a str)> {
+    let segments: Vec<_> = spec
+        .splitn(2, ':')
+        .try_collect()
+        .map_err(|e| anyhow!("OOM error: {:?}", e))?;
+
+    let (name, tag) = match segments[..] {
+        [name] => (name, "latest"),
+        [name, tag] => (name, tag),
+        _ => return Err(anyhow!("container specification cannot be empty")),
+    };
+
+    Ok((name, tag))
 }
 
 /// A directory containing an unpacked OCI image.
@@ -135,6 +140,22 @@ mod tests {
     use super::*;
 
     const BUSYBOX_OCI_IMAGE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/busybox");
+
+    #[test]
+    fn parses_spec_name_only() {
+        match parse_container_spec("alpine").expect("could not parse spec") {
+            ("alpine", "latest") => {}
+            (name, tag) => panic!("unexpectedly parsed: ({}, {})", name, tag),
+        }
+    }
+
+    #[test]
+    fn parses_spec_with_tag() {
+        match parse_container_spec("alpine:3.12.1").expect("could not parse spec") {
+            ("alpine", "3.12.1") => {}
+            (name, tag) => panic!("unexpectedly parsed: ({}, {})", name, tag),
+        }
+    }
 
     #[tokio::test]
     async fn unpacks_image_correctly() {
