@@ -131,16 +131,6 @@ impl Container {
         exec_command(&mut delete_cmd).await?;
         Ok(())
     }
-
-    /// Returns the ID of the container.
-    pub fn id(&self) -> &str {
-        &self.id
-    }
-
-    /// Returns the UUIDv4 assigned to the container.
-    pub fn uuid(&self) -> Uuid {
-        self.uuid
-    }
 }
 
 impl Drop for Container {
