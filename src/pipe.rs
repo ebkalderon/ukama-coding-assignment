@@ -13,8 +13,17 @@ use serde::Deserialize;
 use tokio::fs::File;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
-const START_PIPE_FD: RawFd = 3;
-const SYNC_PIPE_FD: RawFd = 4;
+// We embed the stringified file descriptors as consts to avoid dynamic string allocations.
+macro_rules! define_fds {
+    ($(const $name:ident = $fd:expr;)+) => {
+        $(const $name: (RawFd, &str) = ($fd, stringify!($fd));)+
+    };
+}
+
+define_fds! {
+    const START_PIPE_FD = 3;
+    const SYNC_PIPE_FD = 4;
+}
 
 /// An extension trait for `tokio::process::Command`.
 pub trait CommandExt {
@@ -32,15 +41,15 @@ impl CommandExt for tokio::process::Command {
         let sync_fd = sync.child_fd;
 
         unsafe {
-            self.env("_OCI_STARTPIPE", START_PIPE_FD.to_string())
-                .env("_OCI_SYNCPIPE", SYNC_PIPE_FD.to_string())
+            self.env("_OCI_STARTPIPE", START_PIPE_FD.1)
+                .env("_OCI_SYNCPIPE", SYNC_PIPE_FD.1)
                 .pre_exec(move || {
-                    if libc::dup2(start_fd, START_PIPE_FD) == -1 {
+                    if libc::dup2(start_fd, START_PIPE_FD.0) == -1 {
                         eprintln!("failed to duplicate start pipe file descriptor");
                         return Err(std::io::Error::last_os_error());
                     }
 
-                    if libc::dup2(sync_fd, SYNC_PIPE_FD) == -1 {
+                    if libc::dup2(sync_fd, SYNC_PIPE_FD.0) == -1 {
                         eprintln!("failed to duplicate sync pipe file descriptor");
                         return Err(std::io::Error::last_os_error());
                     }
