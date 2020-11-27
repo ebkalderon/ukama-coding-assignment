@@ -34,17 +34,13 @@ impl Container {
             .args(&["--cid", id])
             .args(&["--cuuid", &uuid.to_string()])
             .args(&["--name", id])
-            .args(&["--rt", "/usr/bin/crun"])
-            .args(&["--rt-arg", "--rtless=true"])
+            .args(&["--runtime", "/usr/bin/crun"])
+            .args(&["--runtime-arg", "--rootless=true"])
             .args(&["--bundle", &rt.bundle_dir.display().to_string()])
             .args(&["--exit-dir", &rt.exits_dir.display().to_string()])
             .args(&["--log-path", &rt.log_file.display().to_string()])
             .args(&["--container-pidfile", &rt.pid_file.display().to_string()])
             .args(&["--socket-dir-path", &rt.base_dir().display().to_string()])
-            .env(
-                "XDG_RUNTIME_DIR",
-                std::env::var_os("XDG_RUNTIME_DIR").unwrap(),
-            )
             .inherit_oci_pipes(&start_pipe, &sync_pipe)
             .spawn()?;
 
