@@ -145,6 +145,12 @@ enum Inheritable {
     Writer,
 }
 
+// Invokes `pipe(2)` and sets either the reader or writer as inheritable by child processes, and
+// returns the reader/writer file descriptor pair.
+//
+// This function is necessary over existing libraries like `os_pipe` because they all use the
+// `FD_CLOEXEC` flag by default, meaning they can't be inherited by child processes, like we need
+// for using `conmon`.
 fn create_pipe(kind: Inheritable) -> std::io::Result<(c_int, c_int)> {
     let mut fds = [-1 as c_int, -1 as c_int];
 
@@ -162,6 +168,8 @@ fn create_pipe(kind: Inheritable) -> std::io::Result<(c_int, c_int)> {
         value => value,
     };
 
+    // Set `FD_CLOEXEC` for the end of the pipe intended for the parent process, leaving the other
+    // end inheritable by the child process.
     if unsafe { libc::fcntl(fds[no_inherit_idx], libc::F_SETFD, flags | libc::FD_CLOEXEC) } == -1 {
         return Err(std::io::Error::last_os_error());
     }
