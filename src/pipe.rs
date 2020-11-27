@@ -75,8 +75,9 @@ impl SyncPipe {
     /// Returns `Err` if an I/O error occurred.
     pub fn new() -> io::Result<Self> {
         let (read_fd, write_fd) = create_pipe(Inheritable::Writer)?;
+        let file = unsafe { std::fs::File::from_raw_fd(read_fd) };
         Ok(SyncPipe {
-            reader: BufReader::new(unsafe { File::from_raw_fd(read_fd) }),
+            reader: BufReader::new(File::from_std(file)),
             child_fd: write_fd,
         })
     }
@@ -130,8 +131,9 @@ impl StartPipe {
     /// Returns `Err` if an I/O error occurred.
     pub fn new() -> io::Result<Self> {
         let (read_fd, write_fd) = create_pipe(Inheritable::Reader)?;
+        let file = unsafe { std::fs::File::from_raw_fd(write_fd) };
         Ok(StartPipe {
-            writer: unsafe { File::from_raw_fd(write_fd) },
+            writer: File::from_std(file),
             child_fd: read_fd,
         })
     }
