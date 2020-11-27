@@ -1,8 +1,10 @@
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use anyhow::anyhow;
 use dashmap::DashMap;
 use fallible_collections::tryformat;
+use warp::{Filter, Reply};
 
 use self::container::Container;
 use self::image::OciImage;
@@ -10,8 +12,9 @@ use self::image::OciImage;
 mod container;
 mod image;
 mod pipe;
+mod rest;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Engine {
     containers: Arc<DashMap<String, Container>>,
 }
@@ -74,17 +77,21 @@ impl Engine {
             None => return Err(anyhow!("container `{}` does not exist", container_name)),
         }
     }
+
+    #[inline]
+    pub async fn serve<A: Into<SocketAddr>>(self, addr: A) {
+        warp::serve(self.into_filter()).run(addr).await
+    }
+
+    #[inline]
+    pub fn into_filter(self) -> impl Filter<Extract = impl Reply> + Clone + 'static {
+        rest::to_filter(self)
+    }
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // TODO: Use `warp` to host REST endpoints.
-    let engine = Engine::new();
-    engine.create("busybox").await?;
-    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-    engine.pause("busybox").await?;
-    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-    engine.resume("busybox").await?;
-    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    let addr: SocketAddr = "127.0.0.1:8080".parse()?;
+    Engine::new().serve(addr).await;
     Ok(())
 }
