@@ -3,7 +3,7 @@
 use std::borrow::Cow;
 
 use fallible_collections::{tryformat, TryReserveError};
-use hyper::StatusCode;
+use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use warp::body::BodyDeserializeError;
 use warp::{Filter, Rejection, Reply};

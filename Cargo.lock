@@ -585,7 +585,7 @@ dependencies = [
  "argh",
  "dashmap",
  "fallible_collections",
- "hyper",
+ "http",
  "libc",
  "serde",
  "serde_json",
