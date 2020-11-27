@@ -16,7 +16,7 @@ const RUNTIME_BIN: &str = "/usr/bin/crun";
 /// An actively running OCI container.
 #[derive(Debug)]
 pub struct Container {
-    name: String,
+    id: String,
     uuid: Uuid,
     pid: i32,
     console_sock: UnixSeqpacket,
@@ -28,7 +28,6 @@ impl Container {
     /// Spawns a new container with the given `id` from the `rt` OCI bundle.
     pub async fn create(id: &str, rt: OciBundle) -> anyhow::Result<Self> {
         let uuid = Uuid::new_v4();
-
         let start_pipe = StartPipe::new()?;
         let mut sync_pipe = SyncPipe::new()?;
 
@@ -38,9 +37,9 @@ impl Container {
             .stderr(Stdio::piped())
             .args(&["--syslog", "--log-level=debug"])
             .arg("--terminal") // Passes `--console-sock` to `crun`.
-            .args(&["--cid", id])
+            .args(&["--cid", &id])
             .args(&["--cuuid", &uuid.to_string()])
-            .args(&["--name", id])
+            .args(&["--name", &id])
             .args(&["--runtime", RUNTIME_BIN])
             .args(&["--runtime-arg", "--rootless=true"])
             .args(&["--bundle", &rt.bundle_dir.display().to_string()])
@@ -92,7 +91,7 @@ impl Container {
         eprintln!("connected to console socket!");
 
         Ok(Container {
-            name: id.to_string(),
+            id: id.to_string(),
             uuid,
             pid,
             console_sock,
@@ -104,7 +103,7 @@ impl Container {
     /// Start the container, if it isn't already running.
     pub async fn start(&self) -> anyhow::Result<()> {
         let mut pause_cmd = Command::new(RUNTIME_BIN);
-        pause_cmd.args(&["start", &self.name]);
+        pause_cmd.args(&["start", &self.id]);
         exec_command(&mut pause_cmd).await?;
         Ok(())
     }
@@ -112,7 +111,7 @@ impl Container {
     /// Pause the container's execution, if it currently running.
     pub async fn pause(&self) -> anyhow::Result<()> {
         let mut pause_cmd = Command::new(RUNTIME_BIN);
-        pause_cmd.args(&["pause", &self.name]);
+        pause_cmd.args(&["pause", &self.id]);
         exec_command(&mut pause_cmd).await?;
         Ok(())
     }
@@ -120,7 +119,7 @@ impl Container {
     /// Resume the container's execution, if it currently paused.
     pub async fn resume(&self) -> anyhow::Result<()> {
         let mut resume_cmd = Command::new(RUNTIME_BIN);
-        resume_cmd.args(&["resume", &self.name]);
+        resume_cmd.args(&["resume", &self.id]);
         exec_command(&mut resume_cmd).await?;
         Ok(())
     }
@@ -128,14 +127,14 @@ impl Container {
     /// Delete the container immediately.
     pub async fn delete(self) -> anyhow::Result<()> {
         let mut delete_cmd = Command::new(RUNTIME_BIN);
-        delete_cmd.args(&["delete", "--force", &self.name]);
+        delete_cmd.args(&["delete", "--force", &self.id]);
         exec_command(&mut delete_cmd).await?;
         Ok(())
     }
 
-    /// Returns the name of the container.
-    pub fn name(&self) -> &str {
-        &self.name
+    /// Returns the ID of the container.
+    pub fn id(&self) -> &str {
+        &self.id
     }
 
     /// Returns the UUIDv4 assigned to the container.
