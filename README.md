@@ -52,10 +52,10 @@ TODO
 * This service will be queried by multiple clients at once and may require some
   form of async concurrency in order to scale efficiently without relying too
   heavily on OS threads.
-* Containers will be referenced by their name/tag pair, as per the design
-  document, meaning only one unique instance of this combination can be created
-  at any given time.
-* Containers will not persist in between individual runs of the application.
+* Containers will be referenced by their name/tag pair, as per the Google Doc,
+  meaning only one unique instance of this combination can be created at any
+  given time.
+* Containers will _not_ persist in between individual runs of the application.
 
 ## Possible improvements
 
