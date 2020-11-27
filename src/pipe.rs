@@ -19,6 +19,10 @@ const SYNC_PIPE_FD: RawFd = 4;
 /// An extension trait for `tokio::process::Command`.
 pub trait CommandExt {
     /// Configures the child process to accept `_OCI_STARTPIPE` and `_OCI_SYNCPIPE`.
+    ///
+    /// This will assign the given start and sync pipes to file descriptors 3 and 4, respectively.
+    /// This is because file descriptors 0, 1, and 2 are already used by `stdin`, `stdout`, and
+    /// `stderr`.
     fn inherit_oci_pipes(&mut self, start: &StartPipe, sync: &SyncPipe) -> &mut Self;
 }
 
