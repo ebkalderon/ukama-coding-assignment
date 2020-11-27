@@ -13,7 +13,7 @@ The following binaries will also need to be available in `$PATH`:
 
 * [containers/skopeo], for fetching container images from remote registries.
 * [containers/umoci], for unpacking fetched OCI images into runtime bundles.
-* [containers/crun], for instantiating containers.
+* [containers/crun], for instantiating and managing containers.
 * [containers/conmon], for monitoring running containers.
 
 [containers/skopeo]: https://github.com/containers/skopeo
