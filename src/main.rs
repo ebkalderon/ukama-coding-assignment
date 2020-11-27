@@ -6,7 +6,7 @@ use dashmap::DashMap;
 use fallible_collections::tryformat;
 use warp::{Filter, Reply};
 
-use self::container::Container;
+use self::container::{Container, State};
 use self::image::OciImage;
 
 mod container;
@@ -55,6 +55,13 @@ impl Engine {
         self.containers.insert(id, container);
 
         Ok(())
+    }
+
+    pub async fn state(&self, container_name: &str) -> anyhow::Result<State> {
+        match self.containers.get(container_name) {
+            Some(container) => container.state().await,
+            None => return Err(anyhow!("container `{}` does not exist", container_name)),
+        }
     }
 
     pub async fn pause(&self, container_name: &str) -> anyhow::Result<()> {

@@ -12,24 +12,24 @@ use crate::Engine;
 
 /// Converts the container engine into a [`warp`](https://docs.rs/warp) REST filter.
 pub fn to_filter(svc: Engine) -> impl Filter<Extract = impl Reply> + Clone + 'static {
-    let create_path = warp::path!("containers" / String);
-    let status_path = warp::path!("containers" / String / "status");
+    let container_path = warp::path!("containers" / String);
     let engine = warp::any().map(move || svc.clone());
 
-    let create = warp::put().and(engine.clone()).and(create_path).and_then(
-        move |eng: Engine, name: String| async move {
+    let create = warp::put()
+        .and(engine.clone())
+        .and(container_path)
+        .and_then(move |eng: Engine, name: String| async move {
             if let Err(e) = eng.create(&name).await {
                 eprintln!("error creating container: {}", e);
                 Err(warp::reject::custom(EngineError(e)))
             } else {
                 Ok(warp::reply())
             }
-        },
-    );
+        });
 
     let delete = warp::delete()
         .and(engine.clone())
-        .and(create_path)
+        .and(container_path)
         .and_then(move |eng: Engine, name: String| async move {
             if let Err(e) = eng.delete(&name).await {
                 eprintln!("error deleting container: {}", e);
@@ -40,8 +40,8 @@ pub fn to_filter(svc: Engine) -> impl Filter<Extract = impl Reply> + Clone + 'st
         });
 
     let modify = warp::put()
-        .and(engine)
-        .and(status_path)
+        .and(engine.clone())
+        .and(warp::path!("containers" / String / "status"))
         .and(warp::body::json())
         .and_then(move |eng: Engine, name: String, body: Modify| async move {
             let result = match body.state {
@@ -57,7 +57,19 @@ pub fn to_filter(svc: Engine) -> impl Filter<Extract = impl Reply> + Clone + 'st
             }
         });
 
-    create.or(delete).or(modify).recover(handle_rejection)
+    let state = warp::get().and(engine).and(container_path).and_then(
+        move |eng: Engine, name: String| async move {
+            match eng.state(&name).await {
+                Ok(state) => Ok(warp::reply::json(&state)),
+                Err(e) => {
+                    eprintln!("error retrieving container state: {}", e);
+                    Err(warp::reject::custom(EngineError(e)))
+                }
+            }
+        },
+    );
+
+    (create.or(delete).or(modify).or(state)).recover(handle_rejection)
 }
 
 /// A list of possible container state transitions.
