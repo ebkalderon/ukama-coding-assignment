@@ -32,23 +32,51 @@ impl Engine {
         Ok(Engine { containers })
     }
 
-    pub async fn fetch(&mut self, container_name: &str) -> anyhow::Result<()> {
+    pub async fn create(&self, container_name: &str) -> anyhow::Result<()> {
         eprintln!("fetching from dockerhub...");
         let fetched_image = OciImage::fetch_from_docker_hub(container_name).await?;
+
         eprintln!("fetched from dockerhub, unpacking...");
         let runtime_dir = fetched_image.unpack().await?;
+
         eprintln!("unpacked, creating container...");
         let container = Container::create(container_name, runtime_dir).await?;
+
+        eprintln!("starting container...");
+        container.start().await?;
+        eprintln!("started container");
+
         self.containers.insert(container_name.into(), container);
         Ok(())
+    }
+
+    pub async fn pause(&self, container_name: &str) -> anyhow::Result<()> {
+        match self.containers.get(container_name) {
+            Some(container) => container.pause().await,
+            None => return Err(anyhow!("container `{}` does not exist", container_name)),
+        }
+    }
+
+    pub async fn resume(&self, container_name: &str) -> anyhow::Result<()> {
+        match self.containers.get(container_name) {
+            Some(container) => container.resume().await,
+            None => return Err(anyhow!("container `{}` does not exist", container_name)),
+        }
+    }
+
+    pub async fn delete(&self, container_name: &str) -> anyhow::Result<()> {
+        match self.containers.remove(container_name) {
+            Some((_, container)) => container.delete().await,
+            None => return Err(anyhow!("container `{}` does not exist", container_name)),
+        }
     }
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // TODO: Use `warp` to host REST endpoints.
-    let mut engine = Engine::new().await?;
-    engine.fetch("busybox").await?;
+    let engine = Engine::new().await?;
+    engine.create("busybox").await?;
     tokio::time::sleep(std::time::Duration::from_secs(1000)).await;
     Ok(())
 }
