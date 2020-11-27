@@ -33,6 +33,7 @@ impl Engine {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // TODO: Use `warp` to host REST endpoints.
     let mut engine = Engine::new();
     engine.fetch("busybox").await?;
     tokio::time::sleep(std::time::Duration::from_secs(1000)).await;
