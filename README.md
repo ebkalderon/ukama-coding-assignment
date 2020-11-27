@@ -28,6 +28,12 @@ command in your terminal:
 cargo run
 ```
 
+To execute the included unit test suite, run:
+
+```sh
+cargo test
+```
+
 ## Usage
 
 TODO

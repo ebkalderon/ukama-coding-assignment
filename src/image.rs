@@ -152,3 +152,38 @@ impl OciBundle {
         self.base_dir.path()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const BUSYBOX_OCI_IMAGE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/busybox");
+
+    #[tokio::test]
+    async fn unpacks_image_correctly() {
+        let bundle = OciBundle::unpack_from(Path::new(BUSYBOX_OCI_IMAGE))
+            .await
+            .expect("failed to unpack bundle");
+
+        assert!(bundle.bundle_dir.exists());
+        assert!(bundle.bundle_dir.is_dir());
+
+        let rootfs_dir = bundle.bundle_dir.join("rootfs");
+        assert!(rootfs_dir.exists());
+        assert!(rootfs_dir.is_dir());
+
+        let config_file = bundle.bundle_dir.join("config.json");
+        assert!(config_file.exists());
+        assert!(config_file.is_file());
+
+        let umoci_file = bundle.bundle_dir.join("umoci.json");
+        assert!(umoci_file.exists());
+        assert!(umoci_file.is_file());
+
+        assert!(bundle.exits_dir.exists());
+        assert!(bundle.exits_dir.is_dir());
+
+        assert!(!bundle.log_file.exists());
+        assert!(!bundle.pid_file.exists());
+    }
+}
