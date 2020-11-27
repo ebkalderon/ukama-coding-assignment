@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use dashmap::DashMap;
+use fallible_collections::tryformat;
 use fallible_collections::FallibleArc;
 
 use self::container::Container;
@@ -46,7 +47,9 @@ impl Engine {
         container.start().await?;
         eprintln!("started container");
 
-        self.containers.insert(container_name.into(), container);
+        let id = tryformat!(64, "{}", container_name).map_err(|e| anyhow!("OOM error: {:?}", e))?;
+        self.containers.insert(id, container);
+
         Ok(())
     }
 

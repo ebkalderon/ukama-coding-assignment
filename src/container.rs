@@ -3,6 +3,7 @@
 use std::process::Stdio;
 
 use anyhow::anyhow;
+use fallible_collections::tryformat;
 use tokio::process::Command;
 use tokio_seqpacket::UnixSeqpacket;
 use uuid::Uuid;
@@ -27,7 +28,16 @@ pub struct Container {
 impl Container {
     /// Spawns a new container with the given `id` from the `rt` OCI bundle.
     pub async fn create(id: &str, rt: OciBundle) -> anyhow::Result<Self> {
+        let id = tryformat!(64, "{}", id).map_err(|e| anyhow!("OOM error: {:?}", e))?;
         let uuid = Uuid::new_v4();
+        let uuid_str = tryformat!(36, "{}", uuid).map_err(|e| anyhow!("OOM error: {:?}", e))?;
+
+        let bundle_dir = rt.bundle_dir.to_str().expect("$TMPDIR is invalid UTF-8");
+        let exits_dir = rt.exits_dir.to_str().expect("$TMPDIR is invalid UTF-8");
+        let log_file = rt.log_file.to_str().expect("$TMPDIR is invalid UTF-8");
+        let pid_file = rt.pid_file.to_str().expect("$TMPDIR is invalid UTF-8");
+        let sock_dir = rt.base_dir().to_str().expect("$TMPDIR is invalid UTF-8");
+
         let start_pipe = StartPipe::new()?;
         let mut sync_pipe = SyncPipe::new()?;
 
@@ -38,15 +48,15 @@ impl Container {
             .args(&["--syslog", "--log-level=debug"])
             .arg("--terminal") // Passes `--console-sock` to `crun`.
             .args(&["--cid", &id])
-            .args(&["--cuuid", &uuid.to_string()])
+            .args(&["--cuuid", &uuid_str])
             .args(&["--name", &id])
             .args(&["--runtime", RUNTIME_BIN])
             .args(&["--runtime-arg", "--rootless=true"])
-            .args(&["--bundle", &rt.bundle_dir.display().to_string()])
-            .args(&["--exit-dir", &rt.exits_dir.display().to_string()])
-            .args(&["--log-path", &rt.log_file.display().to_string()])
-            .args(&["--container-pidfile", &rt.pid_file.display().to_string()])
-            .args(&["--socket-dir-path", &rt.base_dir().display().to_string()])
+            .args(&["--bundle", bundle_dir])
+            .args(&["--exit-dir", exits_dir])
+            .args(&["--log-path", log_file])
+            .args(&["--container-pidfile", pid_file])
+            .args(&["--socket-dir-path", sock_dir])
             .inherit_oci_pipes(&start_pipe, &sync_pipe)
             .spawn()?;
 
@@ -86,12 +96,12 @@ impl Container {
         eprintln!("received PID {}, connecting to console socket...", pid);
 
         // Setup is complete, so connect to the console socket.
-        let sock_path = rt.base_dir().join(uuid.to_string()).join("attach");
+        let sock_path = rt.base_dir().join(uuid_str).join("attach");
         let console_sock = UnixSeqpacket::connect(sock_path).await?;
         eprintln!("connected to console socket!");
 
         Ok(Container {
-            id: id.to_string(),
+            id,
             uuid,
             pid,
             console_sock,
