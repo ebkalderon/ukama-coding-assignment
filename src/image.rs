@@ -58,8 +58,8 @@ impl OciImage {
     }
 
     /// Unpacks the downloaded image into a runnable form.
-    pub async fn unpack(self) -> anyhow::Result<RuntimeDir> {
-        RuntimeDir::unpack_from(self.0.path()).await
+    pub async fn unpack(self) -> anyhow::Result<OciBundle> {
+        OciBundle::unpack_from(self.0.path()).await
     }
 }
 
@@ -67,7 +67,7 @@ impl OciImage {
 ///
 /// The directory will delete itself automtically when the object is dropped.
 #[derive(Debug)]
-pub struct RuntimeDir {
+pub struct OciBundle {
     base_dir: TempDir,
     /// Path to the `bundle` subdirectory, containing the unpacked bundle.
     pub bundle_dir: PathBuf,
@@ -79,7 +79,7 @@ pub struct RuntimeDir {
     pub pid_file: PathBuf,
 }
 
-impl RuntimeDir {
+impl OciBundle {
     async fn unpack_from(oci_src: &Path) -> anyhow::Result<Self> {
         debug_assert!(oci_src.exists());
         debug_assert!(oci_src.is_dir());
@@ -135,7 +135,7 @@ impl RuntimeDir {
         // Create the `exits` subdirectory so it can be used by `conmon` later.
         tokio::fs::create_dir(&exits_dir).await?;
 
-        Ok(RuntimeDir {
+        Ok(OciBundle {
             base_dir,
             bundle_dir,
             exits_dir,

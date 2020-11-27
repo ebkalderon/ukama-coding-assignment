@@ -1,7 +1,7 @@
 use dashmap::DashMap;
 
 use self::container::Container;
-use self::image::{OciImage, RuntimeDir};
+use self::image::OciImage;
 
 mod container;
 mod image;

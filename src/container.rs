@@ -5,8 +5,8 @@ use tokio::process::Command;
 use tokio_seqpacket::UnixSeqpacket;
 use uuid::Uuid;
 
+use crate::image::OciBundle;
 use crate::pipe::{CommandExt, StartPipe, SyncPipe};
-use crate::RuntimeDir;
 
 #[derive(Debug)]
 pub struct Container {
@@ -15,12 +15,12 @@ pub struct Container {
     pid: i32,
     console_sock: UnixSeqpacket,
     sync_pipe: SyncPipe,
-    runtime_dir: RuntimeDir,
+    runtime: OciBundle,
 }
 
 impl Container {
-    pub async fn create(id: &str, root: RuntimeDir) -> anyhow::Result<Self> {
-        let container_uuid = Uuid::new_v4();
+    pub async fn create(id: &str, rt: OciBundle) -> anyhow::Result<Self> {
+        let uuid = Uuid::new_v4();
 
         let start_pipe = StartPipe::new()?;
         let mut sync_pipe = SyncPipe::new()?;
@@ -32,15 +32,15 @@ impl Container {
             .args(&["--syslog", "--log-level=debug"])
             .arg("--terminal") // Passes `--console-sock` to `crun`.
             .args(&["--cid", id])
-            .args(&["--cuuid", &container_uuid.to_string()])
+            .args(&["--cuuid", &uuid.to_string()])
             .args(&["--name", id])
-            .args(&["--runtime", "/usr/bin/crun"])
-            .args(&["--runtime-arg", "--rootless=true"])
-            .args(&["--bundle", &root.bundle_dir.display().to_string()])
-            .args(&["--exit-dir", &root.exits_dir.display().to_string()])
-            .args(&["--log-path", &root.log_file.display().to_string()])
-            .args(&["--container-pidfile", &root.pid_file.display().to_string()])
-            .args(&["--socket-dir-path", &root.base_dir().display().to_string()])
+            .args(&["--rt", "/usr/bin/crun"])
+            .args(&["--rt-arg", "--rtless=true"])
+            .args(&["--bundle", &rt.bundle_dir.display().to_string()])
+            .args(&["--exit-dir", &rt.exits_dir.display().to_string()])
+            .args(&["--log-path", &rt.log_file.display().to_string()])
+            .args(&["--container-pidfile", &rt.pid_file.display().to_string()])
+            .args(&["--socket-dir-path", &rt.base_dir().display().to_string()])
             .env(
                 "XDG_RUNTIME_DIR",
                 std::env::var_os("XDG_RUNTIME_DIR").unwrap(),
@@ -50,7 +50,7 @@ impl Container {
 
         println!(
             "spawned conmon for {}, writing start byte...",
-            root.base_dir().display()
+            rt.base_dir().display()
         );
 
         if let Err(e) = start_pipe.ready().await {
@@ -84,22 +84,18 @@ impl Container {
         eprintln!("received PID {}, connecting to console socket...", pid);
 
         // Setup is complete, so connect to the console socket.
-        let console_sock = UnixSeqpacket::connect(
-            root.base_dir()
-                .join(container_uuid.to_string())
-                .join("attach"),
-        )
-        .await?;
+        let sock_path = rt.base_dir().join(uuid.to_string()).join("attach");
+        let console_sock = UnixSeqpacket::connect(sock_path).await?;
 
         eprintln!("connected to console socket!");
 
         Ok(Container {
             name: id.to_string(),
-            uuid: container_uuid,
+            uuid,
             pid,
             console_sock,
             sync_pipe,
-            runtime_dir: root,
+            runtime: rt,
         })
     }
 
