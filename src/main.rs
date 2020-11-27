@@ -33,6 +33,10 @@ impl Engine {
     }
 
     pub async fn create(&self, container_name: &str) -> anyhow::Result<()> {
+        if self.containers.contains_key(container_name) {
+            return Ok(());
+        }
+
         eprintln!("fetching from dockerhub...");
         let fetched_image = OciImage::fetch_from_docker_hub(container_name).await?;
 
