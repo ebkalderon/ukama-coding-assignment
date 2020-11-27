@@ -45,7 +45,8 @@ impl Container {
         let child = Command::new(CONMON_BIN)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .args(&["--syslog", "--log-level=debug"])
+            .arg("--log-level=debug")
+            .arg("--systemd-cgroup") // Required for rootless pause/resume.
             .arg("--terminal") // Passes `--console-sock` to `crun`.
             .args(&["--cid", &id])
             .args(&["--cuuid", &uuid_str])

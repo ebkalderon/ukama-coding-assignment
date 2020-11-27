@@ -79,6 +79,10 @@ async fn main() -> anyhow::Result<()> {
     // TODO: Use `warp` to host REST endpoints.
     let engine = Engine::new();
     engine.create("busybox").await?;
-    tokio::time::sleep(std::time::Duration::from_secs(1000)).await;
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    engine.pause("busybox").await?;
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    engine.resume("busybox").await?;
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
     Ok(())
 }

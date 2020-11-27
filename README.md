@@ -107,3 +107,18 @@ yourself for use with `light-containerd`:
 USERNAME=$(whoami) # Alternatively, use a user group that you belong to.
 sudo usermod --add-subuids 165536-169631 --add-subgids 165536-169631 "$USERNAME"
 ```
+
+### 2) System must support `cgroup` V2
+
+> Required for _container pause/resume_
+
+At the time of writing, only Fedora Linux ≥31 adopts `cgroup` V2 by default.
+Provided you are running `systemd` ≥226 with Linux ≥4.2, you may add the
+following kernel boot parameter and restart to enable `cgroup` V2:
+
+```text
+systemd.unified_cgroup_hierarchy=1
+```
+
+This mounts both `cgroupfs` and `cgroupfs2` in a unified filesystem hierarchy,
+safely allowing any existing `cgroup` V1 applications to continue working.
