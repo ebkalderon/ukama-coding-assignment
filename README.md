@@ -6,8 +6,8 @@ container engine.
 ## Getting started
 
 To build this project on Linux, you will need the latest version of the
-[Rust toolchain](https://www.rust-lang.org/) (at least version 1.46.0, as
-provided with the `rust-toolchain` file).
+[Rust toolchain](https://www.rust-lang.org/) (at least version 1.46.0, but
+1.48.0 compiles async code faster, as provided in the `rust-toolchain` file).
 
 The following binaries will also need to be available in `$PATH`:
 
