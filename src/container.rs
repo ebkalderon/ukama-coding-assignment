@@ -51,7 +51,6 @@ impl Container {
             .args(&["--cuuid", &uuid_str])
             .args(&["--name", &id])
             .args(&["--runtime", RUNTIME_BIN])
-            .args(&["--runtime-arg", "--rootless=true"])
             .args(&["--bundle", bundle_dir])
             .args(&["--exit-dir", exits_dir])
             .args(&["--log-path", log_file])
@@ -145,7 +144,10 @@ impl Container {
 
 impl Drop for Container {
     fn drop(&mut self) {
-        unsafe { libc::kill(self.pid, libc::SIGKILL) };
+        std::process::Command::new(RUNTIME_BIN)
+            .args(&["delete", "--force", &self.id])
+            .status()
+            .ok();
     }
 }
 

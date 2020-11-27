@@ -65,3 +65,45 @@ TODO
   dependencies for `#![no_std]` alternatives, or rewriting certain functionality
   ourselves with adequate tests.
 * TODO: Add more as we go along...
+
+## Troubleshooting
+
+This container engine leverages [rootless containers] for increased security,
+convenience, and flexibility. Like other rootless container engines, e.g.
+[rootless Podman], there are several Linux kernel features that must be
+available for this engine to run:
+
+[rootless containers]: https://rootlesscontaine.rs/
+[rootless Podman]: https://github.com/containers/podman/blob/master/rootless.md
+
+### 1) System must have `/etc/subuid` and `/etc/subguid`
+
+> Required for _container creation_
+
+If you see an error like this when starting containers:
+
+```text
+writing file `/proc/7109/gid_map`: Invalid argument
+setresuid(0): Invalid argument
+```
+
+then it is possible that your Linux distribution may not come with `/etc/subuid`
+and/or `etc/subgid` files, or perhaps they are configured incorrectly. For
+example, Arch Linux's version of `shadow` does not come with either file by
+default.
+
+If neither `/etc/subuid` nor `/etc/subgid` exist, you can create them like so:
+
+```bash
+USERNAME=$(whoami) # Alternatively, use a user group that you belong to.
+echo "$USERNAME:165536-169631" | sudo tee /etc/subuid /etc/subgid
+```
+
+On the other hand, if both `/etc/subuid` and `/etc/subgid` exist, but your user
+or member group is missing, you can dedicate a range of sub-UIDs and GIDs to
+yourself for use with `light-containerd`:
+
+```bash
+USERNAME=$(whoami) # Alternatively, use a user group that you belong to.
+sudo usermod --add-subuids 165536-169631 --add-subgids 165536-169631 "$USERNAME"
+```
