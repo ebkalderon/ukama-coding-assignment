@@ -1,13 +1,11 @@
 use std::process::Stdio;
 
 use anyhow::anyhow;
-use serde::Deserialize;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 use tokio_seqpacket::UnixSeqpacket;
 use uuid::Uuid;
 
-use crate::pipe::{CommandExt, PipeReader, PipeWriter};
+use crate::pipe::{CommandExt, StartPipe, SyncPipe};
 use crate::RuntimeDir;
 
 #[derive(Debug)]
@@ -16,23 +14,16 @@ pub struct Container {
     uuid: Uuid,
     pid: i32,
     console_sock: UnixSeqpacket,
-    sync_pipe: BufReader<PipeReader>,
+    sync_pipe: SyncPipe,
     runtime_dir: RuntimeDir,
 }
 
 impl Container {
     pub async fn create(id: &str, root: RuntimeDir) -> anyhow::Result<Self> {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum SyncInfo {
-            Err { pid: i32, message: String },
-            Ok { pid: i32 },
-        }
-
         let container_uuid = Uuid::new_v4();
 
-        let mut start_pipe = PipeWriter::inheritable()?;
-        let sync_pipe = PipeReader::inheritable()?;
+        let start_pipe = StartPipe::new()?;
+        let mut sync_pipe = SyncPipe::new()?;
 
         // Spin up the `conmon` child process.
         let child = Command::new("conmon")
@@ -62,22 +53,21 @@ impl Container {
             root.base_dir().display()
         );
 
-        // Write a null byte to `start_pipe`, signalling to start setup.
-        if let Err(e) = start_pipe.write_all(&[0u8]).await {
+        if let Err(e) = start_pipe.ready().await {
             let output = child.wait_with_output().await?;
             if output.status.success() {
-                return Err(anyhow!("failed to write start signal to `conmon`: {}", e));
+                return Err(e);
             } else {
                 let stderr = String::from_utf8(output.stderr)?;
                 return Err(anyhow!(
-                    "failed to write start signal to `conmon` ({}), exited with non-zero status: [{}]",
+                    "{}, `conmon` exited with non-zero status: [{}]",
                     e,
                     stderr
                 ));
             }
         }
 
-        println!("wrote start byte, waiting for `conmon` to fork and exec...");
+        eprintln!("wrote start byte, waiting for `conmon` to fork and exec...");
 
         // Wait for initial setup to complete.
         let output = child.wait_with_output().await?;
@@ -89,24 +79,9 @@ impl Container {
             ));
         }
 
-        println!("reading PID from `conmon`...");
-
-        // Wait to get container PID from `conmon`.
-        let mut sync_pipe = BufReader::new(sync_pipe);
-        let mut line = String::new();
-        sync_pipe.read_line(&mut line).await?;
-        let pid = match serde_json::from_str(&line)? {
-            SyncInfo::Ok { pid } => pid,
-            SyncInfo::Err { pid, message } => {
-                return Err(anyhow!(
-                    "failed to create container, `sync_pipe` returned {}: [{}]",
-                    pid,
-                    message
-                ))
-            }
-        };
-
-        println!("received PID {}, connecting to console socket...", pid);
+        eprintln!("reading PID from `conmon`...");
+        let pid = sync_pipe.get_pid().await?;
+        eprintln!("received PID {}, connecting to console socket...", pid);
 
         // Setup is complete, so connect to the console socket.
         let console_sock = UnixSeqpacket::connect(
@@ -116,7 +91,7 @@ impl Container {
         )
         .await?;
 
-        println!("connected to console socket!");
+        eprintln!("connected to console socket!");
 
         Ok(Container {
             name: id.to_string(),

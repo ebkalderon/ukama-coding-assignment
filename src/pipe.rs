@@ -1,32 +1,43 @@
+//! Inheritable pipes for use with `conmon`.
+//!
+//! Rust does not provide an equivalent of Go's `cmd.ExtraFiles` by default, so this module
+//! provides an equivalent.
+
 use std::io;
 use std::os::raw::c_int;
 use std::os::unix::io::{FromRawFd, RawFd};
-use std::pin::Pin;
-use std::task::{Context, Poll};
 
+use anyhow::{anyhow, Context};
+use libc::pid_t;
+use serde::Deserialize;
 use tokio::fs::File;
-use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
+const START_PIPE_FD: RawFd = 3;
+const SYNC_PIPE_FD: RawFd = 4;
+
+/// An extension trait for `tokio::process::Command`.
 pub trait CommandExt {
-    fn inherit_oci_pipes(&mut self, start_pipe: &PipeWriter, sync_pipe: &PipeReader) -> &mut Self;
+    /// Configures the child process to accept `_OCI_STARTPIPE` and `_OCI_SYNCPIPE`.
+    fn inherit_oci_pipes(&mut self, start: &StartPipe, sync: &SyncPipe) -> &mut Self;
 }
 
 impl CommandExt for tokio::process::Command {
-    fn inherit_oci_pipes(&mut self, start_pipe: &PipeWriter, sync_pipe: &PipeReader) -> &mut Self {
-        let start_fd = start_pipe.child_fd();
-        let sync_fd = sync_pipe.child_fd();
+    fn inherit_oci_pipes(&mut self, start: &StartPipe, sync: &SyncPipe) -> &mut Self {
+        let start_fd = start.child_fd;
+        let sync_fd = sync.child_fd;
 
         unsafe {
-            self.env("_OCI_STARTPIPE", "3")
-                .env("_OCI_SYNCPIPE", "4")
+            self.env("_OCI_STARTPIPE", START_PIPE_FD.to_string())
+                .env("_OCI_SYNCPIPE", SYNC_PIPE_FD.to_string())
                 .pre_exec(move || {
-                    if libc::dup2(start_fd, 3) == -1 {
-                        eprintln!("failed to duplicate start_fd");
+                    if libc::dup2(start_fd, START_PIPE_FD) == -1 {
+                        eprintln!("failed to duplicate start pipe file descriptor");
                         return Err(std::io::Error::last_os_error());
                     }
 
-                    if libc::dup2(sync_fd, 4) == -1 {
-                        eprintln!("failed to duplicate sync_fd");
+                    if libc::dup2(sync_fd, SYNC_PIPE_FD) == -1 {
+                        eprintln!("failed to duplicate sync pipe file descriptor");
                         return Err(std::io::Error::last_os_error());
                     }
 
@@ -36,83 +47,94 @@ impl CommandExt for tokio::process::Command {
     }
 }
 
-/// Reader side of an inheritable pipe.
+/// A readable pipe for retrieving a container PID from `conmon`.
 ///
-/// The child process will inherit the writer as a file descriptor.
+/// The write end of this pipe will be inherited by any spawned child processes.
 #[derive(Debug)]
-pub struct PipeReader {
-    reader: File,
+pub struct SyncPipe {
+    reader: BufReader<File>,
     child_fd: RawFd,
 }
 
-impl PipeReader {
-    pub fn inheritable() -> io::Result<Self> {
+impl SyncPipe {
+    /// Creates a new `SyncPipe`, returning the read end to the user.
+    ///
+    /// Returns `Err` if an I/O error occurred.
+    pub fn new() -> io::Result<Self> {
         let (read_fd, write_fd) = create_pipe(Inheritable::Writer)?;
-        Ok(PipeReader {
-            reader: unsafe { File::from_raw_fd(read_fd) },
+        Ok(SyncPipe {
+            reader: BufReader::new(unsafe { File::from_raw_fd(read_fd) }),
             child_fd: write_fd,
         })
     }
 
-    pub fn child_fd(&self) -> RawFd {
-        self.child_fd
+    /// Retrieves the `pid_t` of the spawned container from `conmon`.
+    ///
+    /// Returns `Err` if an I/O error occurred, or if spawning the container failed.
+    pub async fn get_pid(&mut self) -> anyhow::Result<pid_t> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum SyncInfo {
+            Err { pid: pid_t, message: String },
+            Ok { pid: pid_t },
+        }
+
+        let mut line = String::new();
+        self.reader
+            .read_line(&mut line)
+            .await
+            .context("failed to read from SyncPipe")?;
+
+        match serde_json::from_str(&line).context("failed to parse SyncInfo object")? {
+            SyncInfo::Ok { pid } => Ok(pid),
+            SyncInfo::Err { pid, message } => Err(anyhow!(
+                "failed to read container PID from `conmon`, returned status {}: [{}]",
+                pid,
+                message
+            )),
+        }
     }
 }
 
-impl AsyncRead for PipeReader {
-    fn poll_read(
-        self: Pin<&mut Self>,
-        cx: &mut Context,
-        buf: &mut ReadBuf,
-    ) -> Poll<io::Result<()>> {
-        Pin::new(&mut self.get_mut().reader).poll_read(cx, buf)
-    }
-}
-
-impl Drop for PipeReader {
+impl Drop for SyncPipe {
     fn drop(&mut self) {
         unsafe { libc::close(self.child_fd) };
     }
 }
 
-/// Reader side of an inheritable pipe.
+/// A writable pipe for signaling to `conmon` to begin setting up a container.
 ///
-/// The child process will inherit the writer as a file descriptor.
+/// The read end of this pipe will be inherited by any spawned child processes.
 #[derive(Debug)]
-pub struct PipeWriter {
+pub struct StartPipe {
     writer: File,
     child_fd: RawFd,
 }
 
-impl PipeWriter {
-    pub fn inheritable() -> io::Result<Self> {
+impl StartPipe {
+    /// Creates a new `StartPipe`, returning the write end to the user.
+    ///
+    /// Returns `Err` if an I/O error occurred.
+    pub fn new() -> io::Result<Self> {
         let (read_fd, write_fd) = create_pipe(Inheritable::Reader)?;
-        Ok(PipeWriter {
+        Ok(StartPipe {
             writer: unsafe { File::from_raw_fd(write_fd) },
             child_fd: read_fd,
         })
     }
 
-    pub fn child_fd(&self) -> RawFd {
-        self.child_fd
+    /// Signals `conmon` to begin setting up the container.
+    ///
+    /// Returns `Err` if an I/O error occurred.
+    pub async fn ready(mut self) -> anyhow::Result<()> {
+        self.writer
+            .write_all(&[0u8])
+            .await
+            .context("failed to send ready signal to `conmon`")
     }
 }
 
-impl AsyncWrite for PipeWriter {
-    fn poll_write(self: Pin<&mut Self>, cx: &mut Context, buf: &[u8]) -> Poll<io::Result<usize>> {
-        Pin::new(&mut self.get_mut().writer).poll_write(cx, buf)
-    }
-
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context) -> Poll<io::Result<()>> {
-        Pin::new(&mut self.get_mut().writer).poll_flush(cx)
-    }
-
-    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context) -> Poll<io::Result<()>> {
-        Pin::new(&mut self.get_mut().writer).poll_shutdown(cx)
-    }
-}
-
-impl Drop for PipeWriter {
+impl Drop for StartPipe {
     fn drop(&mut self) {
         unsafe { libc::close(self.child_fd) };
     }
