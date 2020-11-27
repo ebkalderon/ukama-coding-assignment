@@ -8,6 +8,9 @@ use uuid::Uuid;
 use crate::image::OciBundle;
 use crate::pipe::{CommandExt, StartPipe, SyncPipe};
 
+const CONMON_BIN: &str = "conmon";
+const RUNTIME_BIN: &str = "/usr/bin/crun";
+
 #[derive(Debug)]
 pub struct Container {
     name: String,
@@ -26,7 +29,7 @@ impl Container {
         let mut sync_pipe = SyncPipe::new()?;
 
         // Spin up the `conmon` child process.
-        let child = Command::new("conmon")
+        let child = Command::new(CONMON_BIN)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .args(&["--syslog", "--log-level=debug"])
@@ -34,7 +37,7 @@ impl Container {
             .args(&["--cid", id])
             .args(&["--cuuid", &uuid.to_string()])
             .args(&["--name", id])
-            .args(&["--runtime", "/usr/bin/crun"])
+            .args(&["--runtime", RUNTIME_BIN])
             .args(&["--runtime-arg", "--rootless=true"])
             .args(&["--bundle", &rt.bundle_dir.display().to_string()])
             .args(&["--exit-dir", &rt.exits_dir.display().to_string()])
