@@ -34,13 +34,35 @@ To execute the included unit test suite, run:
 cargo test
 ```
 
+To generate HTML documentation for the public crate API, run:
+
+```sh
+cargo doc --open
+```
+
 ## Usage
 
-TODO
+The engine exposes a simplistic REST API for managing the container lifecycle:
+
+### Endpoints
+
+Route                           | Request body             | Description
+--------------------------------|--------------------------|-----------------------------
+`PUT /containers/<name>`        |                          | Fetch/create container
+`GET /containers/<name>`        |                          | Get container status as JSON
+`DELETE /containers/<name>`     |                          | Delete container
+`PUT /containers/<name>/status` | `{ "state": "paused" }`  | Pause container execution
+`PUT /containers/<name>/status` | `{ "state": "running" }` | Resume container execution
 
 ## Project layout
 
-TODO
+Like many idiomatic Rust projects, this service is split into a binary crate
+(the `main.rs` file) and a library crate (`lib.rs` and the rest). This is to
+facilitate simpler unit and integration testing under Cargo, should we require
+it in the future.
+
+The `main.rs` is a very thin shim over `light_containerd::Engine::serve()`,
+which spawns an asynchronous service on the given TCP address.
 
 ## Assumptions
 
