@@ -101,6 +101,38 @@ impl Container {
         })
     }
 
+    /// Start the container, if it isn't already running.
+    pub async fn start(&self) -> anyhow::Result<()> {
+        let mut pause_cmd = Command::new(RUNTIME_BIN);
+        pause_cmd.args(&["start", &self.name]);
+        exec_command(&mut pause_cmd).await?;
+        Ok(())
+    }
+
+    /// Pause the container's execution, if it currently running.
+    pub async fn pause(&self) -> anyhow::Result<()> {
+        let mut pause_cmd = Command::new(RUNTIME_BIN);
+        pause_cmd.args(&["pause", &self.name]);
+        exec_command(&mut pause_cmd).await?;
+        Ok(())
+    }
+
+    /// Resume the container's execution, if it currently paused.
+    pub async fn resume(&self) -> anyhow::Result<()> {
+        let mut resume_cmd = Command::new(RUNTIME_BIN);
+        resume_cmd.args(&["resume", &self.name]);
+        exec_command(&mut resume_cmd).await?;
+        Ok(())
+    }
+
+    /// Delete the container immediately.
+    pub async fn delete(self) -> anyhow::Result<()> {
+        let mut delete_cmd = Command::new(RUNTIME_BIN);
+        delete_cmd.args(&["delete", "--force", &self.name]);
+        exec_command(&mut delete_cmd).await?;
+        Ok(())
+    }
+
     /// Returns the name of the container.
     pub fn name(&self) -> &str {
         &self.name
@@ -116,4 +148,14 @@ impl Drop for Container {
     fn drop(&mut self) {
         unsafe { libc::kill(self.pid, libc::SIGKILL) };
     }
+}
+
+async fn exec_command(cmd: &mut Command) -> anyhow::Result<()> {
+    let output = cmd.output().await?;
+    if !output.status.success() {
+        let stderr = std::str::from_utf8(&output.stderr)?;
+        return Err(anyhow!("`{:?}` returned: [{}]", cmd, stderr));
+    }
+
+    Ok(())
 }
