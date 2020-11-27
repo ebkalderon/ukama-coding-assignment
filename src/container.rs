@@ -1,3 +1,5 @@
+//! Types for creating and controlling running containers.
+
 use std::process::Stdio;
 
 use anyhow::anyhow;
@@ -11,6 +13,7 @@ use crate::pipe::{CommandExt, StartPipe, SyncPipe};
 const CONMON_BIN: &str = "conmon";
 const RUNTIME_BIN: &str = "/usr/bin/crun";
 
+/// An actively running OCI container.
 #[derive(Debug)]
 pub struct Container {
     name: String,
@@ -22,6 +25,7 @@ pub struct Container {
 }
 
 impl Container {
+    /// Spawns a new container with the given `id` from the `rt` OCI bundle.
     pub async fn create(id: &str, rt: OciBundle) -> anyhow::Result<Self> {
         let uuid = Uuid::new_v4();
 
@@ -85,7 +89,6 @@ impl Container {
         // Setup is complete, so connect to the console socket.
         let sock_path = rt.base_dir().join(uuid.to_string()).join("attach");
         let console_sock = UnixSeqpacket::connect(sock_path).await?;
-
         eprintln!("connected to console socket!");
 
         Ok(Container {
@@ -98,10 +101,12 @@ impl Container {
         })
     }
 
+    /// Returns the name of the container.
     pub fn name(&self) -> &str {
         &self.name
     }
 
+    /// Returns the UUIDv4 assigned to the container.
     pub fn uuid(&self) -> Uuid {
         self.uuid
     }
