@@ -3,7 +3,6 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use dashmap::DashMap;
 use fallible_collections::tryformat;
-use fallible_collections::FallibleArc;
 
 use self::container::Container;
 use self::image::OciImage;
@@ -18,8 +17,8 @@ pub struct Engine {
 }
 
 impl Engine {
-    pub async fn new() -> anyhow::Result<Self> {
-        let containers = Arc::try_new(DashMap::new()).map_err(|e| anyhow!("OOM error: {:?}", e))?;
+    pub fn new() -> Self {
+        let containers = Arc::new(DashMap::new());
         let running = containers.clone();
 
         // TODO: Find a way to avoid using `tokio::spawn()` and convert to `join!()` instead.
@@ -30,7 +29,7 @@ impl Engine {
             }
         });
 
-        Ok(Engine { containers })
+        Engine { containers }
     }
 
     pub async fn create(&self, container_name: &str) -> anyhow::Result<()> {
@@ -78,7 +77,7 @@ impl Engine {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // TODO: Use `warp` to host REST endpoints.
-    let engine = Engine::new().await?;
+    let engine = Engine::new();
     engine.create("busybox").await?;
     tokio::time::sleep(std::time::Duration::from_secs(1000)).await;
     Ok(())
