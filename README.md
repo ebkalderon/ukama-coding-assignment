@@ -21,11 +21,18 @@ The following binaries will also need to be available in `$PATH`:
 [containers/crun]: https://github.com/containers/crun
 [containers/conmon]: https://github.com/containers/conmon
 
-To compile the service in debug mode and start it, simply run the following
-command in your terminal:
+To compile the service in debug mode and start it, simply run one of the
+following commands in your terminal:
 
 ```sh
+# Serve on port 8080 by default
 cargo run
+
+# Serve on port 8080 with `info` logging
+RUST_LOG=info cargo run
+
+# Serve on alternate port
+cargo run -- --port 4321
 ```
 
 To execute the included unit test suite, run:

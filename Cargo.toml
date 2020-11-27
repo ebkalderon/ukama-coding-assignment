@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0"
+argh = "0.1.4"
 dashmap = "3.11.10"
 fallible_collections = "0.3.0"
 hyper = "0.13.9"
