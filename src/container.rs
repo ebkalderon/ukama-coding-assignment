@@ -5,6 +5,7 @@ use std::process::Stdio;
 
 use anyhow::anyhow;
 use fallible_collections::tryformat;
+use libc::pid_t;
 use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 use tokio_seqpacket::UnixSeqpacket;
@@ -22,7 +23,7 @@ const RUNTIME_BIN: &str = "/usr/bin/crun";
 pub struct Container {
     id: String,
     uuid: Uuid,
-    pid: i32,
+    pid: pid_t,
     console_sock: UnixSeqpacket,
     sync_pipe: SyncPipe,
     runtime: OciBundle,
