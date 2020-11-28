@@ -36,7 +36,6 @@ impl Engine {
         let containers = Arc::new(DashMap::new());
         let running = containers.clone();
 
-        // TODO: Find a way to avoid using `tokio::spawn()` and convert to `join!()` instead.
         tokio::spawn(async move {
             if let Ok(_) = tokio::signal::ctrl_c().await {
                 running.clear();

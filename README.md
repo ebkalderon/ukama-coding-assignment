@@ -90,6 +90,7 @@ which spawns an asynchronous service on the given TCP address.
 
 * Find (or write) an alternative async executor which allows for explicit
   handling out-of-memory errors.
+* Find a lighter alternative to `warp` which uses `smol` instead of `tokio`.
 * Try to eliminate more hidden heap allocator calls by either swapping out
   dependencies for `#![no_std]` alternatives, or rewriting certain functionality
   ourselves with adequate tests. Robust fallible memory allocation is
@@ -98,8 +99,16 @@ which spawns an asynchronous service on the given TCP address.
   the trick for now until stabilization.
 * Add `conman` to a `cgroup` (V2) before spawning, which would allow us to
   gather rich service metrics about memory usage, CPU usage, thresholds, etc.
+  We also would need to leverage this `cgroup` to enforce OOM limits the
+  container itself ([see `internal/oci/runtime_oci.go` from CRI-O][rt_oci]).
+* Add caching system for the `state()` method by storing some information on the
+  `Container` side.
+* Re-architect `Engine::new()` such that we can avoid using `tokio::spawn()` for
+  running the signal handler task and rely on lighter primitives like `join!()`
+  instead.
+* Improve quality and moderate the frequency of log messages.
 
-* TODO: Add more as we go along...
+[rt_oci]: https://github.com/cri-o/cri-o/blob/f3390f3464d76c4b0dbaf565ba1fca3b67464276/internal/oci/runtime_oci.go#L1190-L1218
 
 ## Troubleshooting
 
