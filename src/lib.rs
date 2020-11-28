@@ -1,4 +1,4 @@
-//! A simple and lightweight container engine implementation.
+//! A simple and lightweight [OCI](https://opencontainers.org/) container engine.
 
 #![deny(missing_debug_implementations)]
 

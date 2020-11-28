@@ -1,13 +1,16 @@
-# Lightweight container engine (WIP)
+# Lightweight container engine
 
-A simplistic but lightweight [OCI](https://opencontainers.org/)-compatible
+A very basic but lightweight [OCI](https://opencontainers.org/)-compatible
 container engine.
 
 ## Getting started
 
-To build this project on Linux, you will need the latest version of the
-[Rust toolchain](https://www.rust-lang.org/) (at least version 1.46.0, but
-1.48.0 compiles async code faster, as provided in the `rust-toolchain` file).
+To build this project on Linux, you will need a recent version of the
+[Rust toolchain](https://www.rust-lang.org/): at least version 1.46.0, at
+minimum, but 1.48.0 is strongly recommended because it performs better with
+async code ([rust-lang/rust#78410]).
+
+[rust-lang/rust#78410]: https://github.com/rust-lang/rust/pull/78410
 
 The following binaries will also need to be available in `$PATH`:
 

@@ -2,6 +2,7 @@
 name = "light-containerd"
 version = "0.1.0"
 authors = ["Eyal Kalderon <ebkalderon@gmail.com>"]
+description = "Lightweight OCI container engine"
 edition = "2018"
 
 [dependencies]

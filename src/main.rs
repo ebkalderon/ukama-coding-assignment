@@ -5,7 +5,7 @@ use std::net::SocketAddr;
 use argh::FromArgs;
 use tracing_subscriber::{util::SubscriberInitExt, EnvFilter};
 
-/// Lightweight container engine with REST API.
+/// Lightweight OCI container engine with REST API.
 #[derive(FromArgs)]
 struct Opt {
     /// TCP port to listen on [default: 8080]
