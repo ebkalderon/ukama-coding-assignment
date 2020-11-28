@@ -7,6 +7,7 @@ use anyhow::anyhow;
 use fallible_collections::{tryformat, vec::TryCollect};
 use tempfile::TempDir;
 use tokio::process::Command;
+use tracing::{info, instrument};
 
 const SKOPEO_BIN: &str = "skopeo";
 const UMOCI_BIN: &str = "umoci";
@@ -17,6 +18,7 @@ pub struct OciImage(TempDir);
 
 impl OciImage {
     /// Retrieves an image from Docker Hub with the given spec (either `name` or `name:tag`).
+    #[instrument]
     pub async fn fetch_from_docker_hub(container_spec: &str) -> anyhow::Result<Self> {
         let (name, tag) = parse_container_spec(container_spec)?;
         let src_dir = tempfile::tempdir()?;
@@ -26,6 +28,8 @@ impl OciImage {
 
         let image_dest = tryformat!(256, "oci:{}:{}", src_dir.path().display(), tag)
             .map_err(|e| anyhow!("OOM error: {:?}", e))?;
+
+        info!("fetching OCI image `{}` -> `{}`", image_src, image_dest);
 
         let mut fetch_cmd = Command::new(SKOPEO_BIN);
         let output = fetch_cmd
@@ -85,6 +89,7 @@ pub struct OciBundle {
 }
 
 impl OciBundle {
+    #[instrument]
     async fn unpack_from(oci_src: &Path) -> anyhow::Result<Self> {
         debug_assert!(oci_src.exists());
         debug_assert!(oci_src.is_dir());
@@ -95,6 +100,8 @@ impl OciBundle {
         let exits_dir = base_dir.path().join("exits");
         let pid_file = base_dir.path().join("container.pid");
         let log_file = base_dir.path().join("container.log");
+
+        info!("unpacking OCI image `{:?}` -> `{:?}`", oci_src, bundle_dir);
 
         let image_flag = tryformat!(256, "--image={}:latest", oci_src.display())
             .map_err(|e| anyhow!("OOM error: {:?}", e))?;

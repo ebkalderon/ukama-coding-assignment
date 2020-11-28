@@ -12,6 +12,7 @@ use libc::pid_t;
 use serde::Deserialize;
 use tokio::fs::File;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tracing::{debug, error, instrument};
 
 // We embed the stringified file descriptors as consts to avoid dynamic string allocations.
 macro_rules! define_fds {
@@ -40,18 +41,23 @@ impl CommandExt for tokio::process::Command {
         let start_fd = start.child_fd;
         let sync_fd = sync.child_fd;
 
+        debug!("setting env for child: _OCI_STARTPIPE={}", START_PIPE_FD.1);
+        debug!("setting env for child: _OCI_SYNCPIPE={}", SYNC_PIPE_FD.1);
+
         unsafe {
             self.env("_OCI_STARTPIPE", START_PIPE_FD.1)
                 .env("_OCI_SYNCPIPE", SYNC_PIPE_FD.1)
                 .pre_exec(move || {
                     if libc::dup2(start_fd, START_PIPE_FD.0) == -1 {
-                        eprintln!("failed to duplicate start pipe file descriptor");
-                        return Err(std::io::Error::last_os_error());
+                        let err = std::io::Error::last_os_error();
+                        error!("failed to duplicate `start_fd` file descriptor: {}", err);
+                        return Err(err);
                     }
 
                     if libc::dup2(sync_fd, SYNC_PIPE_FD.0) == -1 {
-                        eprintln!("failed to duplicate sync pipe file descriptor");
-                        return Err(std::io::Error::last_os_error());
+                        let err = std::io::Error::last_os_error();
+                        error!("failed to duplicate `sync_fd` file descriptor: {}", err);
+                        return Err(err);
                     }
 
                     Ok(())
@@ -73,6 +79,7 @@ impl SyncPipe {
     /// Creates a new `SyncPipe`, returning the read end to the user.
     ///
     /// Returns `Err` if an I/O error occurred.
+    #[instrument]
     pub fn new() -> io::Result<Self> {
         let (read_fd, write_fd) = create_pipe(Inheritable::Writer)?;
         let file = unsafe { std::fs::File::from_raw_fd(read_fd) };
@@ -85,6 +92,7 @@ impl SyncPipe {
     /// Retrieves the `pid_t` of the spawned container from `conmon`.
     ///
     /// Returns `Err` if an I/O error occurred, or if spawning the container failed.
+    #[instrument(skip(self))]
     pub async fn get_pid(&mut self) -> anyhow::Result<pid_t> {
         #[derive(Deserialize)]
         #[serde(untagged)]
@@ -93,6 +101,7 @@ impl SyncPipe {
             Ok { pid: pid_t },
         }
 
+        debug!("retrieving container PID from `conmon`");
         let mut line = String::new();
         self.reader
             .read_line(&mut line)
@@ -129,6 +138,7 @@ impl StartPipe {
     /// Creates a new `StartPipe`, returning the write end to the user.
     ///
     /// Returns `Err` if an I/O error occurred.
+    #[instrument]
     pub fn new() -> io::Result<Self> {
         let (read_fd, write_fd) = create_pipe(Inheritable::Reader)?;
         let file = unsafe { std::fs::File::from_raw_fd(write_fd) };
@@ -141,7 +151,9 @@ impl StartPipe {
     /// Signals `conmon` to begin setting up the container.
     ///
     /// Returns `Err` if an I/O error occurred.
+    #[instrument(skip(self))]
     pub async fn ready(mut self) -> anyhow::Result<()> {
+        debug!("sending ready signal to `conmon`");
         self.writer
             .write_all(&[0u8])
             .await
@@ -155,6 +167,7 @@ impl Drop for StartPipe {
     }
 }
 
+#[derive(Debug)]
 enum Inheritable {
     Reader,
     Writer,
@@ -166,6 +179,7 @@ enum Inheritable {
 // This function is necessary over existing libraries like `os_pipe` because they all use the
 // `FD_CLOEXEC` flag by default, meaning they can't be inherited by child processes, like we need
 // for using `conmon`.
+#[instrument]
 fn create_pipe(kind: Inheritable) -> std::io::Result<(c_int, c_int)> {
     let mut fds = [-1 as c_int, -1 as c_int];
 

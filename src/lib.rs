@@ -10,6 +10,7 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use dashmap::DashMap;
 use fallible_collections::tryformat;
+use tracing::{debug, info};
 use warp::{Filter, Reply};
 
 use self::container::Container;
@@ -55,20 +56,14 @@ impl Engine {
     /// occurred, or if an out-of-memory error was encountered.
     pub async fn create(&self, container_name: &str) -> anyhow::Result<()> {
         if self.containers.contains_key(container_name) {
-            eprintln!("container {} already exists, skipping", container_name);
+            debug!("container {} already exists, skipping", container_name);
             return Ok(());
         }
 
-        eprintln!("fetching from dockerhub...");
         let fetched_image = OciImage::fetch_from_docker_hub(container_name).await?;
-
-        eprintln!("fetched from dockerhub, unpacking...");
         let runtime_dir = fetched_image.unpack().await?;
-
-        eprintln!("unpacked, creating container...");
         let container = Container::create(container_name, runtime_dir).await?;
         container.start().await?;
-        eprintln!("started container");
 
         let id = tryformat!(64, "{}", container_name).map_err(|e| anyhow!("OOM error: {:?}", e))?;
         self.containers.insert(id, container);
@@ -137,7 +132,9 @@ impl Engine {
     /// `PUT /containers/<name>/status` | `{ "state": "running" }` | Resume container execution
     #[inline]
     pub async fn serve<A: Into<SocketAddr>>(self, addr: A) {
-        warp::serve(self.into_filter()).run(addr).await
+        let socket_addr = addr.into();
+        info!("serving container engine on TCP socket: {}", socket_addr);
+        warp::serve(self.into_filter()).run(socket_addr).await
     }
 
     /// Returns the REST API as a bare [`warp`](https://docs.rs/warp) filter for serving on other

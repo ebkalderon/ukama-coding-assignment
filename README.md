@@ -29,7 +29,7 @@ following commands in your terminal:
 cargo run
 
 # Serve on port 8080 with `info` logging
-RUST_LOG=info cargo run
+RUST_LOG=light_containerd=info cargo run
 
 # Serve on alternate port
 cargo run -- --port 4321

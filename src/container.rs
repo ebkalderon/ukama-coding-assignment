@@ -8,6 +8,7 @@ use fallible_collections::tryformat;
 use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 use tokio_seqpacket::UnixSeqpacket;
+use tracing::{debug, info, instrument};
 use uuid::Uuid;
 
 use crate::image::OciBundle;
@@ -29,6 +30,7 @@ pub struct Container {
 
 impl Container {
     /// Spawns a new container with the given `id` from the `rt` OCI bundle.
+    #[instrument(level = "debug", skip(rt), err)]
     pub async fn create(id: &str, rt: OciBundle) -> anyhow::Result<Self> {
         let id = tryformat!(64, "{}", id).map_err(|e| anyhow!("OOM error: {:?}", e))?;
         let uuid = Uuid::new_v4();
@@ -62,11 +64,7 @@ impl Container {
             .inherit_oci_pipes(&start_pipe, &sync_pipe)
             .spawn()?;
 
-        println!(
-            "spawned conmon for {}, writing start byte...",
-            rt.base_dir().display()
-        );
-
+        debug!("spawned `conmon`, signaling ready for setup");
         if let Err(e) = start_pipe.ready().await {
             let output = child.wait_with_output().await?;
             if output.status.success() {
@@ -81,9 +79,7 @@ impl Container {
             }
         }
 
-        eprintln!("wrote start byte, waiting for `conmon` to fork and exec...");
-
-        // Wait for initial setup to complete.
+        debug!("waiting for `conmon` to complete initial setup");
         let output = child.wait_with_output().await?;
         if !output.status.success() {
             let stderr = String::from_utf8(output.stderr)?;
@@ -93,14 +89,15 @@ impl Container {
             ));
         }
 
-        eprintln!("reading PID from `conmon`...");
         let pid = sync_pipe.get_pid().await?;
-        eprintln!("received PID {}, connecting to console socket...", pid);
+        debug!("received container PID from `conmon`: {}", pid);
 
         // Setup is complete, so connect to the console socket.
         let sock_path = rt.base_dir().join(uuid_str).join("attach");
-        let console_sock = UnixSeqpacket::connect(sock_path).await?;
-        eprintln!("connected to console socket!");
+        debug!("connecting to console socket: {}", sock_path.display());
+        let console_sock = UnixSeqpacket::connect(&sock_path).await?;
+        debug!("connected to console socket: {}", sock_path.display());
+        info!("container has been created with PID {}", pid);
 
         Ok(Container {
             id,
@@ -113,8 +110,9 @@ impl Container {
     }
 
     /// Start the container, if it isn't already running.
+    #[instrument(level = "info", skip(self), fields(id = self.id.as_str(), pid = self.pid, err))]
     pub async fn start(&self) -> anyhow::Result<()> {
-        eprintln!("starting container `{}`...", self.id);
+        info!("starting container");
         let mut pause_cmd = Command::new(RUNTIME_BIN);
         pause_cmd.args(&["start", &self.id]);
         exec_command(&mut pause_cmd).await?;
@@ -122,8 +120,9 @@ impl Container {
     }
 
     /// Pause the container's execution, if it currently running.
+    #[instrument(level = "info", skip(self), fields(id = self.id.as_str(), pid = self.pid, err))]
     pub async fn pause(&self) -> anyhow::Result<()> {
-        eprintln!("pausing container `{}`...", self.id);
+        info!("pausing container");
         let mut pause_cmd = Command::new(RUNTIME_BIN);
         pause_cmd.args(&["pause", &self.id]);
         exec_command(&mut pause_cmd).await?;
@@ -131,8 +130,9 @@ impl Container {
     }
 
     /// Resume the container's execution, if it currently paused.
+    #[instrument(level = "info", skip(self), fields(id = self.id.as_str(), pid = self.pid, err))]
     pub async fn resume(&self) -> anyhow::Result<()> {
-        eprintln!("resuming container `{}`...", self.id);
+        info!("resuming container");
         let mut resume_cmd = Command::new(RUNTIME_BIN);
         resume_cmd.args(&["resume", &self.id]);
         exec_command(&mut resume_cmd).await?;
@@ -140,8 +140,9 @@ impl Container {
     }
 
     /// Delete the container immediately.
+    #[instrument(level = "info", skip(self), fields(id = self.id.as_str(), pid = self.pid, err))]
     pub async fn delete(self) -> anyhow::Result<()> {
-        eprintln!("deleting container `{}`...", self.id);
+        info!("deleting container");
         let mut delete_cmd = Command::new(RUNTIME_BIN);
         delete_cmd.args(&["delete", "--force", &self.id]);
         exec_command(&mut delete_cmd).await?;
@@ -149,7 +150,9 @@ impl Container {
     }
 
     /// Retrieves the current state of the container.
+    #[instrument(level = "info", skip(self), fields(id = self.id.as_str(), pid = self.pid, err))]
     pub async fn state(&self) -> anyhow::Result<State> {
+        info!("retrieving container state");
         let mut state_cmd = Command::new(RUNTIME_BIN);
         state_cmd.args(&["state", &self.id]);
 
@@ -194,6 +197,8 @@ impl Drop for Container {
 }
 
 async fn exec_command(cmd: &mut Command) -> anyhow::Result<Vec<u8>> {
+    debug!("executing runtime command: {:?}", cmd);
+
     let output = cmd
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

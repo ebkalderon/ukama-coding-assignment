@@ -5,6 +5,7 @@ use std::borrow::Cow;
 use fallible_collections::{tryformat, TryReserveError};
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
+use tracing::{error, warn};
 use warp::body::BodyDeserializeError;
 use warp::{Filter, Rejection, Reply};
 
@@ -20,7 +21,7 @@ pub fn to_filter(svc: Engine) -> impl Filter<Extract = impl Reply> + Clone + 'st
         .and(container_path)
         .and_then(move |eng: Engine, name: String| async move {
             if let Err(e) = eng.create(&name).await {
-                eprintln!("error creating container: {}", e);
+                warn!("error creating container: {}", e);
                 Err(warp::reject::custom(EngineError(e)))
             } else {
                 Ok(warp::reply())
@@ -32,7 +33,7 @@ pub fn to_filter(svc: Engine) -> impl Filter<Extract = impl Reply> + Clone + 'st
         .and(container_path)
         .and_then(move |eng: Engine, name: String| async move {
             if let Err(e) = eng.delete(&name).await {
-                eprintln!("error deleting container: {}", e);
+                warn!("error deleting container: {}", e);
                 Err(warp::reject::custom(EngineError(e)))
             } else {
                 Ok(warp::reply())
@@ -50,7 +51,7 @@ pub fn to_filter(svc: Engine) -> impl Filter<Extract = impl Reply> + Clone + 'st
             };
 
             if let Err(e) = result {
-                eprintln!("error modifying container state: {}", e);
+                warn!("error modifying container state: {}", e);
                 Err(warp::reject::custom(EngineError(e)))
             } else {
                 Ok(warp::reply())
@@ -62,7 +63,7 @@ pub fn to_filter(svc: Engine) -> impl Filter<Extract = impl Reply> + Clone + 'st
             match eng.state(&name).await {
                 Ok(state) => Ok(warp::reply::json(&state)),
                 Err(e) => {
-                    eprintln!("error retrieving container state: {}", e);
+                    warn!("error retrieving container state: {}", e);
                     Err(warp::reject::custom(EngineError(e)))
                 }
             }
@@ -131,7 +132,7 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, Rejection> {
             .map(Cow::from)
             .map_err(|e| warp::reject::custom(OomError(e)))?;
     } else {
-        eprintln!("unhandled rejection: {:?}", err);
+        error!("unhandled rejection: {:?}", err);
         code = StatusCode::INTERNAL_SERVER_ERROR;
         message = Cow::from("UNHANDLED_REJECTION");
     }
