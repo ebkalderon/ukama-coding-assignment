@@ -92,7 +92,13 @@ which spawns an asynchronous service on the given TCP address.
   handling out-of-memory errors.
 * Try to eliminate more hidden heap allocator calls by either swapping out
   dependencies for `#![no_std]` alternatives, or rewriting certain functionality
-  ourselves with adequate tests.
+  ourselves with adequate tests. Robust fallible memory allocation is
+  unfortunately not available in the Rust standard library at the moment (at
+  least, not on stable), so the `fallible-collections` wrapper crate should do
+  the trick for now until stabilization.
+* Add `conman` to a `cgroup` (V2) before spawning, which would allow us to
+  gather rich service metrics about memory usage, CPU usage, thresholds, etc.
+
 * TODO: Add more as we go along...
 
 ## Troubleshooting
