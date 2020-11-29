@@ -110,6 +110,8 @@ which spawns an asynchronous service on the given TCP address.
   running the signal handler task and rely on lighter primitives like `join!()`
   instead.
 * Improve quality and moderate the frequency of log messages.
+* Make the service generic over both TCP and UDS streams, so we may be able to
+  write some automated integration or E2E tests in the future.
 
 [rt_oci]: https://github.com/cri-o/cri-o/blob/f3390f3464d76c4b0dbaf565ba1fca3b67464276/internal/oci/runtime_oci.go#L1190-L1218
 
