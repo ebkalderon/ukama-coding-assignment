@@ -135,7 +135,7 @@ setresuid(0): Invalid argument
 ```
 
 then it is possible that your Linux distribution may not come with `/etc/subuid`
-and/or `etc/subgid` files, or perhaps they are configured incorrectly. For
+and/or `/etc/subgid` files, or perhaps they are configured incorrectly. For
 example, Arch Linux's version of `shadow` does not come with either file by
 default.
 
